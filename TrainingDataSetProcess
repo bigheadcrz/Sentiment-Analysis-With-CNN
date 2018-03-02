@@ -1,0 +1,67 @@
+import  xml.dom.minidom
+import jieba 
+import gensim.models as models
+import numpy as np
+
+address='Training.xml'
+dom = xml.dom.minidom.parse(address)
+TestingData= dom.documentElement
+weibos = TestingData.getElementsByTagName("weibo")
+infor = []
+print("start parsing xml file")
+for weibo in weibos:   
+    emotion_type1 = weibo.getAttribute("emotion-type1")
+    emotion_type2 = weibo.getAttribute("emotion-type2")
+    if ( len(emotion_type1) > 1):
+        listTemp = []
+        sentences = weibo.getElementsByTagName('sentence')
+        for sentence in sentences:            
+            listTemp.append(sentence.childNodes[0].data)
+        joined = " ".join(listTemp)
+        infor.append([emotion_type1,joined])
+print('end parsing xml file')
+print('start cut word')
+for index,item in enumerate(infor):
+    temp = jieba.cut(item[-1])
+    _list = []
+    for ele in temp:
+        _list.append(ele)
+    infor[index].append(_list)
+print('end parse')
+print('start  load model')
+model=models.KeyedVectors.load_word2vec_format('word2vect.bin',binary=True)
+print('model ready')
+print('start word2vect')
+emotionArray = []
+emotionHash={
+    '厌恶':0,
+    '高兴':1,
+    '喜好':2,
+    '恐惧':3,
+    '惊讶':4,
+    '悲伤':5,
+    '愤怒':6
+    }
+for item in infor:
+    emotionArray.append(emotionHash[item[0]])
+print(len(emotionArray))
+f1 = open('data1.npy', 'wb')
+np.save(f1, emotionArray)
+#np.savetxt('tag.csv', emotionArray, fmt='%d', delimiter=',')
+vectorList = []
+for item in infor:
+    words = item[2]
+    _temp = []
+    for ele in words:
+        if ele in model:
+            _temp.append(model[ele])
+    vectorList.append(_temp)
+
+#(4338, 100, 64)
+f2 = open('data2.npy', 'wb')
+vectorList = np.array(vectorList)
+print(len(infor))
+#np.savetxt('input.csv', vectorList, delimiter=',')
+np.save(f2, vectorList)
+
+
