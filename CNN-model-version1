@@ -1,0 +1,139 @@
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.utils.data as Data
+
+f = open('data1.npy', 'rb')
+data_label = np.load(f)
+f = open('data2.npy', 'rb')
+data_input = np.load(f)
+data_size = []
+f = open('check1.npy', 'rb')
+check_label = np.load(f)
+f = open('check2.npy', 'rb')
+check_input = np.load(f)
+check_size = []
+
+
+def paddingTheList(inputList):
+    length = 100 - len(inputList)
+    data_size.append(length)
+    padding = np.zeros(64).astype(np.double)
+    for item in range(length):
+        inputList.append(padding)
+    return inputList
+
+
+for index, item in enumerate(data_input):
+    data_input[index] = paddingTheList(item)
+
+for index, item in enumerate(check_input):
+    check_input[index] = paddingTheList(item)
+
+#print(data_input.shape)
+#print(len(data_input[1]))
+#print(len(data_input[1][1]))
+checks = np.zeros((2172, 100, 64))
+inputs = np.zeros((4338, 100, 64))
+for i in range(4338):
+    for j in range(100):
+        for k in range(64):
+            inputs[i][j][k] = data_input[i][j][k]
+
+for i in range(2172):
+    for j in range(100):
+        for k in range(64):
+            checks[i][j][k] = data_input[i][j][k]
+check_input = checks
+data_input = inputs
+checks = np.array(checks).astype(np.double)
+data_input = np.array(data_input).astype(np.double)
+# 4338 * 100 * 64
+''' data process'''
+
+check_input = torch.from_numpy(check_input)
+check_label = torch.from_numpy(check_label)
+check_input = torch.unsqueeze(check_input, 1, out=None)
+check_input = check_input.type(torch.FloatTensor)
+
+data_label = torch.from_numpy(data_label)
+data_input = torch.from_numpy(data_input)
+data_input = torch.unsqueeze(data_input, 1, out=None)
+data_input = data_input.type(torch.FloatTensor)
+torch_dataset = Data.TensorDataset(data_tensor=data_input, target_tensor=data_label)
+loader = Data.DataLoader(
+    dataset=torch_dataset,
+    batch_size=100
+)
+
+
+def getResult(label, output):
+    rightCount = 0
+    errorCount = 0
+
+    for index in range(2172):
+        max, maxpos = 0, 0
+        for i in range(7):
+            if output[i] > max:
+                max = output[i]
+                maxpos = i
+        #print(maxpos, ':', label[index].data[0])
+        if maxpos == label[index].data[0]:
+            rightCount += 1
+        else:
+            errorCount += 1
+    return rightCount/(rightCount+errorCount)
+
+
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=1,
+                kernel_size=5,
+                stride=1,
+                padding=2
+            ),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4),
+            # 1x100x64 -> 1x25x16
+        )
+        self.out = nn.Linear(25*16, 7)
+
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = x.view(x.size(0), -1)
+        x = self.out(x)
+        sf = nn.Softmax()
+        x = sf(x)
+        return x
+
+
+cnn = CNN()
+
+optimizer = torch.optim.Adam(cnn.parameters(), lr=0.001)
+loss_func = nn.CrossEntropyLoss()
+for epoch in range(100):
+    for step, (batch_x, batch_y) in enumerate(loader):
+        batch_x = Variable(batch_x)
+        batch_y = Variable(batch_y)
+        output = cnn(batch_x)
+        loss = loss_func(output, batch_y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    if epoch%10 == 0:
+        cnn.eval()
+        test_input = Variable(check_input)
+        test_label = Variable(check_label)
+        test_output = cnn(test_input)
+        result = getResult(test_label, test_output)
+        print(result)
+        cnn.train()
+    print('a step finished')
+
+
