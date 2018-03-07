@@ -15,6 +15,7 @@ f = open('check2.npy', 'rb')
 check_input = np.load(f)
 check_size = []
 
+ARG1 = 64
 
 def paddingTheList(inputList):
     length = 100 - len(inputList)
@@ -90,7 +91,7 @@ class CNN(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=32,
+                out_channels=ARG1,
                 kernel_size=(2, 64),
                 stride=1,
                 padding=0
@@ -103,11 +104,11 @@ class CNN(nn.Module):
         self.conv2 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=32,
+                out_channels=ARG1,
                 kernel_size=(3, 64),
                 stride=1,
                 padding=0
-                # 1x100x64-> 8x98x1
+                # 1x100x64-> 8x99x1
             ),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(98, 1)),
@@ -116,11 +117,11 @@ class CNN(nn.Module):
         self.conv3 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=32,
+                out_channels=ARG1,
                 kernel_size=(4, 64),
                 stride=1,
                 padding=0
-                # 1x100x64-> 8x98x1
+                # 1x100x64-> 8x99x1
             ),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(97, 1)),
@@ -128,30 +129,27 @@ class CNN(nn.Module):
         )
         self.liner = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(32*3, 16),
-            nn.ReLU(),
-            nn.Linear(16, 7),
+            nn.Linear(ARG1*3, 7),
             nn.Softmax()
         )
+        self.dropout = nn.Dropout()
 
 
     def forward(self, x):
         x1 = self.conv1(x)
         x2 = self.conv2(x)
         x3 = self.conv3(x)
-     #   print(x1)
-        x_ = [x1, x2, x3]
-        x = torch.cat(x, dim=1)
-        print(x)
+        x = torch.cat([x1, x2, x3], dim=1)
         x.view(x.size(0), -1)
-
+        x = torch.squeeze(x)
+        x = self.dropout(x)
         x = self.liner(x)
         return x
 
 
 cnn = CNN()
 
-optimizer = torch.optim.Adam(cnn.parameters(), lr=0.0001)
+optimizer = torch.optim.Adam(cnn.parameters(), lr=0.0002)
 loss_func = nn.CrossEntropyLoss()
 for epoch in range(10000):
     for step, (batch_x, batch_y) in enumerate(loader):
@@ -162,7 +160,7 @@ for epoch in range(10000):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    if epoch % 10 == 0:
+    if epoch % 1 == 0:
         cnn.eval()
         test_input = Variable(check_input)
         test_label = Variable(check_label)
@@ -170,5 +168,9 @@ for epoch in range(10000):
         result = getResult(test_label, test_output)
         print('epoch:', epoch, ' result is ', result)
         cnn.train()
+    if result > 0.27:
+        break
+
+
 
 
